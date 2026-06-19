@@ -128,7 +128,19 @@ jobs:
         working-directory: openwrt
         shell: bash
         run: |
-          make package/luci-app-pppoe-capture/download V=s
+          make download V=s
+
+      - name: Build OpenWrt host tools
+        working-directory: openwrt
+        shell: bash
+        run: |
+          make tools/install V=s -j"$(nproc)" || make tools/install V=sc -j1
+
+      - name: Build OpenWrt toolchain
+        working-directory: openwrt
+        shell: bash
+        run: |
+          make toolchain/install V=s -j"$(nproc)" || make toolchain/install V=sc -j1
 
       - name: Compile package
         working-directory: openwrt
