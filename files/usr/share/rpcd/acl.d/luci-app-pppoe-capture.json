@@ -1,0 +1,16 @@
+{
+	"luci-app-pppoe-capture": {
+		"description": "PPPoE 凭证抓取插件访问权限",
+		"read": {
+			"uci": ["pppoe-capture"],
+			"file": {
+				"/usr/lib/pppoe-capture/pppoe-capture.sh": ["exec"],
+				"/usr/lib/pppoe-capture/pppoe-parse.sh": ["exec"],
+				"/tmp/pppoe.cap": ["read"]
+			}
+		},
+		"write": {
+			"uci": ["pppoe-capture"]
+		}
+	}
+}

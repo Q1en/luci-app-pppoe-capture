@@ -1,0 +1,37 @@
+{
+	"admin/services/pppoe_capture": {
+		"title": "PPPoE 凭证抓取",
+		"order": 60,
+		"action": {
+			"type": "firstchild"
+		},
+		"depends": {
+			"acl": ["luci-app-pppoe-capture"],
+			"fs": "/etc/config/pppoe-capture"
+		}
+	},
+	"admin/services/pppoe_capture/main": {
+		"title": "抓包与解析",
+		"order": 10,
+		"action": {
+			"type": "template",
+			"path": "pppoe-capture/pppoe_capture"
+		}
+	},
+	"admin/services/pppoe_capture/settings": {
+		"title": "设置",
+		"order": 20,
+		"action": {
+			"type": "cbi",
+			"path": "pppoe_capture"
+		}
+	},
+	"admin/services/pppoe_capture/api": {
+		"order": 30,
+		"action": {
+			"type": "call",
+			"function": "api_action",
+			"module": "luci.controller.pppoe_capture"
+		}
+	}
+}

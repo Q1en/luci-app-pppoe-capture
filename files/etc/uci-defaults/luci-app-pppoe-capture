@@ -1,0 +1,18 @@
+#!/bin/sh
+# uci-defaults: 初始化 pppoe-capture 配置并清理缓存
+
+# 若配置文件中尚无 global 段，则添加
+if ! uci -q get pppoe-capture.@global[0] >/dev/null 2>&1; then
+	uci -q add pppoe-capture global >/dev/null
+	uci -q set pppoe-capture.@global[0].iface='br-lan'
+	uci -q set pppoe-capture.@global[0].duration='0'
+	uci -q set pppoe-capture.@global[0].max_packets='0'
+	uci -q commit pppoe-capture
+fi
+
+# 确保 LCE 脚本可执行
+chmod +x /usr/lib/pppoe-capture/pppoe-capture.sh 2>/dev/null
+chmod +x /usr/lib/pppoe-capture/pppoe-parse.sh 2>/dev/null
+
+rm -f /tmp/luci-indexcache 2>/dev/null
+exit 0

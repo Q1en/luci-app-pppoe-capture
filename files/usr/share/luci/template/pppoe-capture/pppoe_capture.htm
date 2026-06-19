@@ -1,0 +1,222 @@
+<%#
+PPPoE 凭证抓取 - 主操作页面
+提供：开始/停止抓包、实时状态、自动解析结果展示、捕获文件下载
+%>
+<%+header%>
+<%- luci.sys.exec("/usr/lib/pppoe-capture/pppoe-capture.sh status >/dev/null 2>&1") %>
+
+<h2><%:PPPoE 凭证抓取%></h2>
+<div class="cbi-map-descr">
+	<%:本工具在 OpenWrt 上启动 tcpdump，截获旧路由器 PPPoE 拨号报文，自动解析 PAP/CHAP 认证信息，提取明文宽带账号与密码。%>
+</div>
+
+<fieldset class="cbi-section">
+	<legend><%:使用步骤%></legend>
+	<div class="cbi-section-node">
+		<ol style="padding-left:20px;line-height:1.8">
+			<li><%:用网线将<strong>旧路由器 WAN 口</strong>连接到本路由器的 <strong>LAN 口</strong>（默认监听 br-lan）。%></li>
+			<li><%:点击下方<strong>"开始抓包"</strong>按钮。%></li>
+			<li><%:重启旧路由器，或在其后台触发 PPPoE 拨号。%></li>
+			<li><%:等待几秒后点击<strong>"停止抓包并解析"</strong>，结果会自动显示在下方。%></li>
+		</ol>
+	</div>
+</fieldset>
+
+<fieldset class="cbi-section">
+	<legend><%:抓包控制%></legend>
+	<div class="cbi-section-node">
+		<div class="cbi-value">
+			<label class="cbi-value-title"><%:当前状态%></label>
+			<div class="cbi-value-field">
+				<span id="pc-status" class="cbi-value-description">--</span>
+			</div>
+		</div>
+		<div class="cbi-value">
+			<label class="cbi-value-title"><%:监听接口%></label>
+			<div class="cbi-value-field">
+				<span id="pc-iface" class="cbi-value-description">--</span>
+			</div>
+		</div>
+		<div class="cbi-value">
+			<label class="cbi-value-title"><%:捕获文件%></label>
+			<div class="cbi-value-field">
+				<span id="pc-file" class="cbi-value-description">--</span>
+				&nbsp;<a id="pc-download" href="#" style="display:none">[ <%:下载%> ]</a>
+			</div>
+		</div>
+		<div class="cbi-value">
+			<label class="cbi-value-title"><%:文件大小%></label>
+			<div class="cbi-value-field">
+				<span id="pc-size" class="cbi-value-description">--</span>
+			</div>
+		</div>
+
+		<div class="cbi-page-actions">
+			<input type="button" class="cbi-button cbi-button-apply" id="pc-start" value="<%:开始抓包%>" />
+			<input type="button" class="cbi-button cbi-button-reset" id="pc-stop" value="<%:停止抓包并解析%>" />
+			<input type="button" class="cbi-button" id="pc-parse" value="<%:立即解析%>" />
+			<input type="button" class="cbi-button" id="pc-clean" value="<%:清理%>" />
+		</div>
+	</div>
+</fieldset>
+
+<fieldset class="cbi-section">
+	<legend><%:解析结果%></legend>
+	<div class="cbi-section-node">
+		<div id="pc-result" class="cbi-value-description" style="padding:8px;min-height:40px;white-space:pre-wrap">
+			<%:暂无结果。完成抓包后结果会显示在这里。%>
+		</div>
+	</div>
+</fieldset>
+
+<style>
+.pc-cred-box {
+	margin-top: 10px;
+	padding: 12px 16px;
+	border: 1px solid #6c6;
+	border-radius: 4px;
+	background: #f0faf0;
+	font-family: monospace;
+	font-size: 14px;
+	line-height: 1.8;
+}
+.pc-cred-box .label {
+	display: inline-block;
+	width: 110px;
+	color: #374;
+	font-weight: bold;
+}
+.pc-cred-box .value {
+	color: #040;
+	user-select: all;
+	-webkit-user-select: all;
+}
+.pc-note {
+	margin-top: 10px;
+	color: #a40;
+	font-size: 12px;
+}
+</style>
+
+<div id="pc-cred-container"></div>
+
+<script type="text/javascript">
+(function(){
+	var api = '<%=luci.dispatcher.build_url("admin", "services", "pppoe_capture", "api")%>';
+
+	function esc(s){
+		return String(s == null ? '' : s)
+			.replace(/&/g,'&').replace(/</g,'<')
+			.replace(/>/g,'>').replace(/"/g,'"');
+	}
+	function fmtSize(b){
+		b = parseInt(b||0,10);
+		if(b < 1024) return b + ' B';
+		if(b < 1048576) return (b/1024).toFixed(1) + ' KB';
+		return (b/1048576).toFixed(2) + ' MB';
+	}
+
+	function apiCall(action, cb){
+		var btns = document.querySelectorAll('#pc-start,#pc-stop,#pc-parse,#pc-clean');
+		btns.forEach(function(b){ b.disabled = true; });
+		var xhr = new XMLHttpRequest();
+		xhr.open('POST', api + '?action=' + encodeURIComponent(action), true);
+		xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+		xhr.onreadystatechange = function(){
+			if(xhr.readyState === 4){
+				btns.forEach(function(b){ b.disabled = false; });
+				var data;
+				try { data = JSON.parse(xhr.responseText); }
+				catch(e){ data = { status:'error', msg:'解析后端响应失败: ' + xhr.responseText.slice(0,200) }; }
+				cb && cb(data);
+			}
+		};
+		xhr.send('action=' + encodeURIComponent(action));
+	}
+
+	function renderCred(d){
+		var c = document.getElementById('pc-cred-container');
+		if(!d || d.status === 'no_data' || d.status === 'error'){
+			c.innerHTML = '<div class="pc-note">' + esc(d && d.msg ? d.msg : '未获取到凭证') + '</div>';
+			return;
+		}
+		var html = '<div class="pc-cred-box">';
+		html += '<div><span class="label">认证协议:</span><span class="value">' + esc(d.protocol||d.method||'-') + '</span></div>';
+		html += '<div><span class="label">宽带账号:</span><span class="value">' + esc(d.username||'-') + '</span></div>';
+		if(d.protocol === 'PAP' || d.method === 'PAP'){
+			html += '<div><span class="label">宽带密码:</span><span class="value">' + esc(d.password||'-') + '</span></div>';
+		} else {
+			html += '<div><span class="label">CHAP ID:</span><span class="value">' + esc(d.chap_id||'-') + '</span></div>';
+			html += '<div><span class="label">Challenge:</span><span class="value">' + esc(d.challenge||'-') + '</span></div>';
+			html += '<div><span class="label">Response:</span><span class="value">' + esc(d.response||'-') + '</span></div>';
+			html += '<div class="pc-note">CHAP 协议不传输明文密码，上述为挑战/响应哈希。'
+				+ '需在电脑上用 hashcat/asleap 等工具离线爆破还原原密码。</div>';
+		}
+		html += '</div>';
+		c.innerHTML = html;
+	}
+
+	function updateStatus(d){
+		var st = document.getElementById('pc-status');
+		var iface = document.getElementById('pc-iface');
+		var file = document.getElementById('pc-file');
+		var size = document.getElementById('pc-size');
+		var dl = document.getElementById('pc-download');
+		if(!d){ st.textContent = '--'; return; }
+		var label = d.status;
+		if(d.status === 'running') label = '正在抓包…';
+		else if(d.status === 'idle') label = '已停止';
+		else if(d.status === 'error') label = '错误';
+		st.textContent = label + (d.msg ? ' (' + d.msg + ')' : '');
+		iface.textContent = d.iface || '--';
+		file.textContent = d.file || '--';
+		size.textContent = d.size != null ? fmtSize(d.size) : '--';
+		if(d.file && d.size > 0){
+			dl.style.display = 'inline';
+			dl.href = '<%=luci.dispatcher.build_url("admin", "services")%>/pppoe_capture/api?action=download';
+		} else {
+			dl.style.display = 'none';
+		}
+	}
+
+	function refreshStatus(){
+		apiCall('status', function(d){ updateStatus(d); });
+	}
+
+	document.getElementById('pc-start').onclick = function(){
+		apiCall('start', function(d){
+			updateStatus(d);
+			renderCred(null);
+			document.getElementById('pc-result').textContent = d.msg || '';
+		});
+	};
+	document.getElementById('pc-stop').onclick = function(){
+		apiCall('stop', function(d){
+			updateStatus(d);
+			document.getElementById('pc-result').textContent = d.msg || '';
+			if(d.result){ renderCred(d.result); }
+		});
+	};
+	document.getElementById('pc-parse').onclick = function(){
+		apiCall('parse', function(d){
+			renderCred(d);
+			document.getElementById('pc-result').textContent = d.msg || '';
+		});
+	};
+	document.getElementById('pc-clean').onclick = function(){
+		if(!confirm('<%:确认清理捕获文件与日志？%>')) return;
+		apiCall('clean', function(d){
+			updateStatus(d);
+			renderCred(null);
+			document.getElementById('pc-result').textContent = d.msg || '';
+		});
+	};
+
+	// 初始加载
+	refreshStatus();
+	// 定时刷新状态（每 3 秒）
+	setInterval(refreshStatus, 3000);
+})();
+</script>
+
+<%+footer%>

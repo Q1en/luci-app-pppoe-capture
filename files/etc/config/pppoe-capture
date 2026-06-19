@@ -1,0 +1,4 @@
+config global 'global'
+	option iface 'br-lan'
+	option duration '0'
+	option max_packets '0'
