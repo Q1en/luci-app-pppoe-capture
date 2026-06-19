@@ -134,7 +134,7 @@ jobs:
         working-directory: openwrt
         shell: bash
         run: |
-          make package/luci-app-pppoe-capture/compile V=s -j"$(nproc)"
+          make package/luci-app-pppoe-capture/compile V=s -j"$(nproc)" || make package/luci-app-pppoe-capture/compile V=sc -j1
 
       - name: Collect artifacts
         shell: bash
