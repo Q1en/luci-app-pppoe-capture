@@ -99,10 +99,19 @@ jobs:
         shell: bash
         run: |
           mkdir -p openwrt/package/luci-app-pppoe-capture
+          if [ -f luci-app-pppoe-capture/Makefile ]; then
+            PACKAGE_DIR="luci-app-pppoe-capture"
+          elif [ -f Makefile ] && [ -d files ]; then
+            PACKAGE_DIR="."
+          else
+            echo "Cannot find luci-app-pppoe-capture package directory" >&2
+            exit 1
+          fi
           rsync -a --delete \
             --exclude '.git' \
             --exclude '.github' \
-            luci-app-pppoe-capture/ openwrt/package/luci-app-pppoe-capture/
+            --exclude 'openwrt' \
+            "$PACKAGE_DIR/" openwrt/package/luci-app-pppoe-capture/
 
       - name: Configure OpenWrt
         working-directory: openwrt
